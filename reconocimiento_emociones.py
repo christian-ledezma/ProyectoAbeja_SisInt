@@ -1,15 +1,19 @@
 """
-Módulo de reconocimiento de emociones por voz.
+Módulo de reconocimiento de emociones por voz y síntesis de voz (TTS).
 
 Usa SpeechRecognition para capturar audio del micrófono,
 transcribe a texto y detecta emociones mediante palabras clave en español.
+Usa pyttsx3 para síntesis de voz offline (espeak en Linux).
 
 Dependencias:
-    pip install SpeechRecognition PyAudio
-    (Linux: sudo apt install portaudio19-dev antes de PyAudio)
+    pip install SpeechRecognition PyAudio pyttsx3
+    (Linux: sudo apt install portaudio19-dev espeak antes de PyAudio/pyttsx3)
 """
 
 import threading
+import queue
+import subprocess
+import shutil
 
 try:
     import speech_recognition as sr
@@ -17,6 +21,16 @@ try:
 except ImportError:
     SR_DISPONIBLE = False
     print("WARNING: Instala SpeechRecognition → pip install SpeechRecognition")
+
+try:
+    import pyttsx3
+    TTS_DISPONIBLE = True
+except ImportError:
+    TTS_DISPONIBLE = False
+
+# Detectar espeak-ng o espeak como fallback
+_ESPEAK_CMD = shutil.which("espeak-ng") or shutil.which("espeak")
+ESPEAK_DISPONIBLE = _ESPEAK_CMD is not None
 
 
 # ──────────────────────────────────────────────────
@@ -176,3 +190,137 @@ class ReconocedorEmociones:
                 if keyword in texto:
                     return emocion
         return None
+
+
+# ──────────────────────────────────────────────────
+#  Síntesis de voz (TTS) — pyttsx3 con fallback a espeak-ng
+# ──────────────────────────────────────────────────
+class Hablador:
+    """
+    Síntesis de voz en un hilo dedicado.
+
+    Intenta usar pyttsx3 primero. Si falla (error común con espeak-ng
+    reciente), cae automáticamente a llamar espeak-ng/espeak directamente
+    via subprocess — sin dependencias extra.
+
+    Uso:
+        hablador = Hablador()      # arranca el hilo
+        hablador.decir("Hola")     # no bloqueante
+        hablador.detener()         # al cerrar el programa
+    """
+
+    def __init__(self, rate: int = 155, volume: float = 1.0):
+        self._cola: queue.Queue[str | None] = queue.Queue()
+        self._rate = rate
+        self._volume = volume
+        self._backend: str = "none"       # "pyttsx3" | "espeak" | "none"
+        self._engine = None
+        self._hilo = threading.Thread(target=self._worker, daemon=True)
+        self._hilo.start()
+
+    # ────────────────── API pública ──────────────────
+
+    def decir(self, texto: str):
+        """Encola un mensaje para ser hablado (no bloqueante).
+        Si hay un mensaje anterior aún sonando, este lo reemplaza."""
+        while not self._cola.empty():
+            try:
+                self._cola.get_nowait()
+            except queue.Empty:
+                break
+        self._cola.put(texto)
+
+    def detener(self):
+        """Señala al hilo worker que termine."""
+        self._cola.put(None)
+
+    # ────────────────── Inicialización ──────────────────
+
+    def _init_pyttsx3(self) -> bool:
+        """Intenta inicializar pyttsx3. Devuelve True si tuvo éxito."""
+        if not TTS_DISPONIBLE:
+            return False
+        try:
+            engine = pyttsx3.init()
+            engine.setProperty('rate', self._rate)
+            engine.setProperty('volume', self._volume)
+            # Seleccionar voz en español
+            try:
+                for v in engine.getProperty('voices'):
+                    vid = v.id.lower()
+                    langs = [str(l).lower() for l in (getattr(v, 'languages', []) or [])]
+                    if any('es' in l for l in langs) or 'spanish' in vid or '/es' in vid:
+                        engine.setProperty('voice', v.id)
+                        break
+            except Exception:
+                pass
+            # Prueba rápida: si say + runAndWait no explotan, funciona
+            engine.say("")
+            engine.runAndWait()
+            self._engine = engine
+            self._backend = "pyttsx3"
+            print("[Hablador] Backend: pyttsx3")
+            return True
+        except Exception as exc:
+            print(f"[Hablador] pyttsx3 falló ({exc}), probando espeak directo...")
+            return False
+
+    def _init_espeak(self) -> bool:
+        """Verifica que espeak-ng/espeak esté disponible."""
+        if not ESPEAK_DISPONIBLE:
+            return False
+        # Verificar que la voz en español exista
+        try:
+            subprocess.run(
+                [_ESPEAK_CMD, "--voices=es"], capture_output=True, timeout=5
+            )
+        except Exception:
+            pass  # si falla el listado, igual intentamos
+        self._backend = "espeak"
+        print(f"[Hablador] Backend: {_ESPEAK_CMD}")
+        return True
+
+    # ────────────────── Hablar ──────────────────
+
+    def _hablar_pyttsx3(self, texto: str):
+        try:
+            self._engine.say(texto)
+            self._engine.runAndWait()
+        except Exception as exc:
+            print(f"[Hablador] Error pyttsx3: {exc}")
+
+    def _hablar_espeak(self, texto: str):
+        """Llama a espeak-ng/espeak directamente como subproceso."""
+        try:
+            # -v es  → voz en español
+            # -s N   → velocidad (palabras por minuto)
+            # -a N   → amplitud (0-200)
+            speed = str(self._rate)
+            amp = str(int(self._volume * 100))
+            subprocess.run(
+                [_ESPEAK_CMD, "-v", "es", "-s", speed, "-a", amp, texto],
+                capture_output=True, timeout=30
+            )
+        except subprocess.TimeoutExpired:
+            print("[Hablador] espeak timeout")
+        except Exception as exc:
+            print(f"[Hablador] Error espeak: {exc}")
+
+    # ────────────────── Worker ──────────────────
+
+    def _worker(self):
+        # Intentar backends en orden de preferencia
+        if not self._init_pyttsx3():
+            if not self._init_espeak():
+                print("[Hablador] No hay motor TTS disponible. "
+                      "Instala espeak-ng: sudo apt install espeak-ng")
+                return
+
+        hablar_fn = (self._hablar_pyttsx3 if self._backend == "pyttsx3"
+                     else self._hablar_espeak)
+
+        while True:
+            texto = self._cola.get()
+            if texto is None:
+                break
+            hablar_fn(texto)

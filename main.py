@@ -9,7 +9,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from EntornoHex import EntornoHex
-from reconocimiento_emociones import ReconocedorEmociones, EMOCIONES, NOMBRE_LEGIBLE
+from reconocimiento_emociones import ReconocedorEmociones, Hablador, EMOCIONES, NOMBRE_LEGIBLE
 
 # ==============================
 # CONFIGURACIÓN GENERAL
@@ -443,6 +443,7 @@ def main():
     state         = GameState(RADIUS)
     entorno       = EntornoHex(state)
     reconocedor   = ReconocedorEmociones()
+    hablador      = Hablador()
 
     # ── Variables de interfaz ──
     hovered_cell    = None
@@ -465,6 +466,7 @@ def main():
     msg_mascota  = "¿Cómo te sientes hoy?"
     sub_mascota  = ""
     hint_mascota = "Presiona ESPACIO para hablar"
+    hablador.decir("¿Cómo te sientes hoy?")
 
     print("=" * 52)
     print("  Panal de Sentimientos – Controles")
@@ -512,11 +514,13 @@ def main():
                 hint_mascota = "Presiona S para ir  |  N para cancelar"
                 target_name  = zona["nombre"]
                 state.set_pollen(zona["centro"])
+                hablador.decir(f"Sientes {nombre}. {info_e['consejo']} ¿Quieres ir a la {zona['nombre']}?")
             elif r_est == "error":
                 fase = FASE_ERROR
                 msg_mascota  = reconocedor.mensaje_error
                 sub_mascota  = ""
                 hint_mascota = "Presiona ESPACIO para intentar de nuevo"
+                hablador.decir(reconocedor.mensaje_error)
 
         # ──────────────────────────────────────
         #  Auto-caminado
@@ -535,6 +539,7 @@ def main():
                     msg_mascota  = f"¡Llegamos a la {zona.get('nombre', '')}!"
                     sub_mascota  = consejo
                     hint_mascota = "Presiona ESPACIO para hablar de nuevo"
+                    hablador.decir(f"¡Llegamos a la {zona.get('nombre', '')}! {consejo}")
 
         # ──────────────────────────────────────
         #  Eventos
@@ -570,6 +575,7 @@ def main():
                         msg_mascota  = "¡Habla! Cuéntame cómo te sientes..."
                         sub_mascota  = '(Di algo como "Estoy triste" o "Me siento feliz")'
                         hint_mascota = ""
+                        hablador.decir("¡Habla! Cuéntame cómo te sientes.")
                         emocion_actual = None
                         path_cells = set(); camino_len = 0
                         auto_walk = False
@@ -602,11 +608,13 @@ def main():
                             msg_mascota  = f"¡Vamos a la {zona['nombre']}!"
                             sub_mascota  = ""
                             hint_mascota = ""
+                            hablador.decir(f"¡Vamos a la {zona['nombre']}!")
                         else:
                             fase = FASE_ERROR
                             msg_mascota  = "No encontré un camino. Intenta quitar paredes."
                             sub_mascota  = ""
                             hint_mascota = "Presiona ESPACIO para hablar de nuevo"
+                            hablador.decir("No encontré un camino. Intenta quitar paredes.")
 
                 # ── N → cancelar ──
                 elif event.key == pygame.K_n:
@@ -618,6 +626,7 @@ def main():
                         sub_mascota  = ""
                         hint_mascota = "Presiona ESPACIO para hablar"
                         path_cells = set(); camino_len = 0
+                        hablador.decir("¿Qué necesitas? Estoy aquí para ti.")
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if hovered_cell and not auto_walk:
@@ -754,6 +763,7 @@ def main():
 
         pygame.display.flip()
 
+    hablador.detener()
     pygame.quit()
     sys.exit()
 

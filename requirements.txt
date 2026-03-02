@@ -1,3 +1,4 @@
 pygame
 SpeechRecognition
 PyAudio
+pyttsx3
