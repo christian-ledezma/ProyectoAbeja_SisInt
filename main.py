@@ -575,12 +575,15 @@ def main():
                         msg_mascota  = "¡Habla! Cuéntame cómo te sientes..."
                         sub_mascota  = '(Di algo como "Estoy triste" o "Me siento feliz")'
                         hint_mascota = ""
-                        hablador.decir("¡Habla! Cuéntame cómo te sientes.")
                         emocion_actual = None
                         path_cells = set(); camino_len = 0
                         auto_walk = False
                         reconocedor.reset()
-                        reconocedor.iniciar_escucha()
+                        # La escucha arranca DESPUÉS de que el TTS termine
+                        hablador.decir(
+                            "¡Habla! ",
+                            al_terminar=reconocedor.iniciar_escucha
+                        )
 
                 # ── ENTER → búsqueda manual (debug) ──
                 elif event.key == pygame.K_RETURN:

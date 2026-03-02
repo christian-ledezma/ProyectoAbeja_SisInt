@@ -210,7 +210,7 @@ class Hablador:
     """
 
     def __init__(self, rate: int = 155, volume: float = 1.0):
-        self._cola: queue.Queue[str | None] = queue.Queue()
+        self._cola: queue.Queue[tuple[str, callable] | None] = queue.Queue()
         self._rate = rate
         self._volume = volume
         self._backend: str = "none"       # "pyttsx3" | "espeak" | "none"
@@ -220,18 +220,20 @@ class Hablador:
 
     # ────────────────── API pública ──────────────────
 
-    def decir(self, texto: str):
+    def decir(self, texto: str, al_terminar: callable = None):
         """Encola un mensaje para ser hablado (no bloqueante).
-        Si hay un mensaje anterior aún sonando, este lo reemplaza."""
+        Si hay un mensaje anterior aún sonando, este lo reemplaza.
+        *al_terminar* se ejecuta justo después de que el TTS termine."""
         while not self._cola.empty():
             try:
                 self._cola.get_nowait()
             except queue.Empty:
                 break
-        self._cola.put(texto)
+        self._cola.put((texto, al_terminar))
 
     def detener(self):
         """Señala al hilo worker que termine."""
+        # None puro (no tupla) es la señal de cierre
         self._cola.put(None)
 
     # ────────────────── Inicialización ──────────────────
@@ -320,7 +322,13 @@ class Hablador:
                      else self._hablar_espeak)
 
         while True:
-            texto = self._cola.get()
-            if texto is None:
+            item = self._cola.get()
+            if item is None:
                 break
+            texto, callback = item
             hablar_fn(texto)
+            if callback:
+                try:
+                    callback()
+                except Exception as exc:
+                    print(f"[Hablador] Error en callback: {exc}")
