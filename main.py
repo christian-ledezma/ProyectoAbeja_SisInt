@@ -92,13 +92,14 @@ FLORES_DECORATIVAS = [
 ]
 
 # ── Fases del juego ──
-FASE_IDLE       = "idle"
-FASE_ESCUCHANDO = "escuchando"
-FASE_PROCESANDO = "procesando"
-FASE_DETECTADO  = "detectado"
-FASE_CAMINANDO  = "caminando"
-FASE_LLEGADA    = "llegada"
-FASE_ERROR      = "error"
+FASE_IDLE        = "idle"
+FASE_ESCUCHANDO  = "escuchando"
+FASE_PROCESANDO  = "procesando"
+FASE_ESCRIBIENDO = "escribiendo"
+FASE_DETECTADO   = "detectado"
+FASE_CAMINANDO   = "caminando"
+FASE_LLEGADA     = "llegada"
+FASE_ERROR       = "error"
 
 # ── Auto-caminado ──
 AUTO_WALK_MS = 200             # milisegundos entre pasos
@@ -266,7 +267,7 @@ def render_text_wrapped(font, text, color, max_width):
 # ==============================
 def draw_panel_mascota(surface, fonts, mascot_sprite,
                        mensaje, sub_mensaje, hint, fase,
-                       emocion_color, tick):
+                       emocion_color, tick, texto_input=""):
     """Panel inferior con la mascota-abeja y burbuja de diálogo."""
     font_t, font_b = fonts
 
@@ -315,6 +316,17 @@ def draw_panel_mascota(surface, fonts, mascot_sprite,
             render_text_wrapped(font_b, sub_mensaje, (100, 100, 100), bw - 30)
         ):
             surface.blit(surf, (bx + 15, y_sub + i * 18))
+
+    # ── Caja de texto (modo escritura) ──
+    if fase == FASE_ESCRIBIENDO:
+        tb_y = by + bh - 30
+        tb_rect = pygame.Rect(bx + 10, tb_y, bw - 20, 24)
+        pygame.draw.rect(surface, (240, 240, 240), tb_rect, border_radius=6)
+        pygame.draw.rect(surface, (120, 120, 200), tb_rect, 2, border_radius=6)
+        # Cursor parpadeante
+        cursor = "|" if (tick // 500) % 2 == 0 else ""
+        txt_s = font_b.render(texto_input + cursor, True, (40, 40, 40))
+        surface.blit(txt_s, (bx + 16, tb_y + 4))
 
     # ── Hint ──
     if hint:
@@ -465,13 +477,15 @@ def main():
     # Mensajes del panel
     msg_mascota  = "¿Cómo te sientes hoy?"
     sub_mascota  = ""
-    hint_mascota = "Presiona ESPACIO para hablar"
+    hint_mascota = "ESPACIO = hablar  |  W = escribir"
+    texto_input  = ""       # buffer de texto cuando se escribe
     hablador.decir("¿Cómo te sientes hoy?")
 
     print("=" * 52)
     print("  Panal de Sentimientos – Controles")
     print("=" * 52)
     print("  ESPACIO  -> hablar (reconocimiento de voz)")
+    print("  W        -> escribir cómo te sientes")
     print("  S / Y    -> confirmar ir a zona")
     print("  N        -> cancelar")
     print("  E        -> alternar edición / juego")
@@ -519,7 +533,7 @@ def main():
                 fase = FASE_ERROR
                 msg_mascota  = reconocedor.mensaje_error
                 sub_mascota  = ""
-                hint_mascota = "Presiona ESPACIO para intentar de nuevo"
+                hint_mascota = "ESPACIO = hablar  |  W = escribir"
                 hablador.decir(reconocedor.mensaje_error)
 
         # ──────────────────────────────────────
@@ -538,7 +552,7 @@ def main():
                     consejo = EMOCIONES.get(emocion_actual, {}).get("consejo", "")
                     msg_mascota  = f"¡Llegamos a la {zona.get('nombre', '')}!"
                     sub_mascota  = consejo
-                    hint_mascota = "Presiona ESPACIO para hablar de nuevo"
+                    hint_mascota = "ESPACIO = hablar  |  W = escribir"
                     hablador.decir(f"¡Llegamos a la {zona.get('nombre', '')}! {consejo}")
 
         # ──────────────────────────────────────
@@ -547,6 +561,46 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
+            # ─────────── Modo escritura: captura todo el teclado ───────────
+            elif fase == FASE_ESCRIBIENDO and event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    # Cancelar escritura
+                    fase = FASE_IDLE
+                    texto_input = ""
+                    msg_mascota  = "¿Cómo te sientes hoy?"
+                    sub_mascota  = ""
+                    hint_mascota = "ESPACIO = hablar  |  W = escribir"
+                elif event.key == pygame.K_RETURN:
+                    # Procesar texto escrito
+                    if texto_input.strip():
+                        txt = texto_input.strip().lower()
+                        emocion_det = ReconocedorEmociones._detectar_emocion(txt)
+                        if emocion_det:
+                            fase = FASE_DETECTADO
+                            emocion_actual = emocion_det
+                            info_e = EMOCIONES[emocion_actual]
+                            zona   = ZONAS_EMOCIONES[emocion_actual]
+                            nombre = NOMBRE_LEGIBLE[emocion_actual]
+                            msg_mascota  = f"Sientes {nombre}. {info_e['consejo']}"
+                            sub_mascota  = f"¿Quieres ir a la {zona['nombre']}?"
+                            hint_mascota = "Presiona S para ir  |  N para cancelar"
+                            target_name  = zona["nombre"]
+                            state.set_pollen(zona["centro"])
+                            hablador.decir(f"Sientes {nombre}. {info_e['consejo']} ¿Quieres ir a la {zona['nombre']}?")
+                        else:
+                            fase = FASE_ERROR
+                            msg_mascota  = "No detecté una emoción clara. ¿Estás triste, enojado, alegre o avergonzado?"
+                            sub_mascota  = ""
+                            hint_mascota = "ESPACIO = hablar  |  W = escribir"
+                            hablador.decir("No detecté una emoción clara.")
+                    texto_input = ""
+                elif event.key == pygame.K_BACKSPACE:
+                    texto_input = texto_input[:-1]
+                else:
+                    # Agregar carácter (incluye unicode / acentos)
+                    if event.unicode and event.unicode.isprintable():
+                        texto_input += event.unicode
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
@@ -579,11 +633,23 @@ def main():
                         path_cells = set(); camino_len = 0
                         auto_walk = False
                         reconocedor.reset()
-                        # La escucha arranca DESPUÉS de que el TTS termine
                         hablador.decir(
                             "¡Habla! ",
                             al_terminar=reconocedor.iniciar_escucha
                         )
+
+                # ── W → modo escritura ──
+                elif event.key == pygame.K_w:
+                    if fase not in (FASE_ESCUCHANDO, FASE_PROCESANDO, FASE_CAMINANDO, FASE_ESCRIBIENDO):
+                        fase = FASE_ESCRIBIENDO
+                        texto_input  = ""
+                        msg_mascota  = "Escribe cómo te sientes:"
+                        sub_mascota  = ""
+                        hint_mascota = "ENTER = enviar  |  ESC = cancelar"
+                        emocion_actual = None
+                        path_cells = set(); camino_len = 0
+                        auto_walk = False
+                        hablador.decir("Escribe cómo te sientes.")
 
                 # ── ENTER → búsqueda manual (debug) ──
                 elif event.key == pygame.K_RETURN:
@@ -616,7 +682,7 @@ def main():
                             fase = FASE_ERROR
                             msg_mascota  = "No encontré un camino. Intenta quitar paredes."
                             sub_mascota  = ""
-                            hint_mascota = "Presiona ESPACIO para hablar de nuevo"
+                            hint_mascota = "ESPACIO = hablar  |  W = escribir"
                             hablador.decir("No encontré un camino. Intenta quitar paredes.")
 
                 # ── N → cancelar ──
@@ -627,7 +693,7 @@ def main():
                         target_name    = None
                         msg_mascota  = "¿Qué necesitas? Estoy aquí para ti."
                         sub_mascota  = ""
-                        hint_mascota = "Presiona ESPACIO para hablar"
+                        hint_mascota = "ESPACIO = hablar  |  W = escribir"
                         path_cells = set(); camino_len = 0
                         hablador.decir("¿Qué necesitas? Estoy aquí para ti.")
 
@@ -762,7 +828,7 @@ def main():
             emo_color = ZONAS_EMOCIONES[emocion_actual]["color"]
         draw_panel_mascota(screen, (font_title, font_body), mascot_sprite,
                            msg_mascota, sub_mascota, hint_mascota,
-                           fase, emo_color, tick)
+                           fase, emo_color, tick, texto_input)
 
         pygame.display.flip()
 
