@@ -188,19 +188,57 @@ class GameState:
 TECNICAS    = ["costouniforme", "codicioso", "a_estrella"]
 HEURISTICAS = ["hexagonal", "euclidiana"]
 
-def _mostrar_game_over(screen, font_title, font_body, nombre_nivel):
-    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 160))
-    screen.blit(overlay, (0, 0))
-    msg1 = font_title.render("😢 ¡Una avispa te picó!", True, (255, 80, 80))
-    msg2 = font_body.render(f"Nivel: {nombre_nivel}", True, (255, 220, 80))
-    msg3 = font_body.render("Cierra la ventana para salir.", True, (200, 200, 200))
+def _mostrar_game_over(screen, font_title, font_body):
     W, H = screen.get_size()
-    screen.blit(msg1, (W//2 - msg1.get_width()//2, H//2 - 50))
-    screen.blit(msg2, (W//2 - msg2.get_width()//2, H//2))
-    screen.blit(msg3, (W//2 - msg3.get_width()//2, H//2 + 30))
-    pygame.display.flip()
-    pygame.time.wait(3000)
+    clock = pygame.time.Clock()
+
+    btn_retry = pygame.Rect(W//2 - 160, H//2 + 50,  145, 44)
+    btn_exit  = pygame.Rect(W//2 + 15,  H//2 + 50,  145, 44)
+
+    while True:
+        clock.tick(60)
+        mx, my = pygame.mouse.get_pos()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if btn_retry.collidepoint(mx, my):
+                    return True
+                if btn_exit.collidepoint(mx, my):
+                    return False
+
+        # Overlay oscuro
+        overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 170))
+        screen.blit(overlay, (0, 0))
+
+        # Mensajes
+        msg1 = font_title.render("😢 ¡Una avispa te picó!", True, (255, 80, 80))
+        msg2 = font_body.render("¿Qué quieres hacer?", True, (255, 220, 80))
+        screen.blit(msg1, (W//2 - msg1.get_width()//2, H//2 - 60))
+        screen.blit(msg2, (W//2 - msg2.get_width()//2, H//2 - 20))
+
+        # Botón reintentar
+        hover_retry = btn_retry.collidepoint(mx, my)
+        pygame.draw.rect(screen, (80, 200, 80) if hover_retry else (50, 160, 50),
+                         btn_retry, border_radius=10)
+        pygame.draw.rect(screen, (200, 255, 200), btn_retry, 2, border_radius=10)
+        lbl_r = font_body.render("🔄 ¡Otra vez!", True, (255, 255, 255))
+        screen.blit(lbl_r, (btn_retry.centerx - lbl_r.get_width()//2,
+                             btn_retry.centery - lbl_r.get_height()//2))
+
+        # Botón salir
+        hover_exit = btn_exit.collidepoint(mx, my)
+        pygame.draw.rect(screen, (200, 60, 60) if hover_exit else (160, 40, 40),
+                         btn_exit, border_radius=10)
+        pygame.draw.rect(screen, (255, 200, 200), btn_exit, 2, border_radius=10)
+        lbl_e = font_body.render("🚪 Salir", True, (255, 255, 255))
+        screen.blit(lbl_e, (btn_exit.centerx - lbl_e.get_width()//2,
+                             btn_exit.centery - lbl_e.get_height()//2))
+
+        pygame.display.flip()
 
 def main():
     pygame.init()
@@ -221,11 +259,17 @@ def main():
     sprites   = load_sprites(SPRITES, HEX_SIZE)
 
     nivel_idx    = mostrar_menu(wasp_img=sprites.get("wasp"))
-    state        = GameState(RADIUS)
-    entorno      = EntornoHex(state)
-    wasps        = configurar_nivel(state, nivel_idx)
     nombre_nivel = NIVELES[nivel_idx][0]
-    print(f"Nivel seleccionado: {nombre_nivel} ({len(wasps)} avispas)")
+
+    def iniciar_nivel():
+        st = GameState(RADIUS)
+        ent = EntornoHex(st)
+        ws = configurar_nivel(st, nivel_idx)
+        ent.wasps = ws
+        print(f"Nivel: {nombre_nivel} ({len(ws)} avispas)")
+        return st, ent, ws
+
+    state, entorno, wasps = iniciar_nivel()
 
     hovered_cell  = None
     edit_mode     = False
@@ -233,6 +277,7 @@ def main():
     heu_idx       = 0          # hexagonal por defecto
     path_cells    = set()      # celdas del camino actual (sin inicio ni meta)
     camino_len    = 0
+    move_count    = 0
 
     print("Controles:")
     print("  E        → alternar modo juego / edición")
@@ -302,13 +347,21 @@ def main():
                             camino_len = 0
                         else:
                             if state.move_player(hovered_cell):
+                                move_count += 1 
                                 path_cells = set()
                                 camino_len = 0
                                 # Comprobar colisión con avispa
                                 if state.player in wasps:
                                     print("Te picó una avispa! Fin del juego.")
-                                    _mostrar_game_over(screen, font_title, font_body, nombre_nivel)
-                                    running = False
+                                    reintentar = _mostrar_game_over(screen, font_title, font_body)
+                                    _mostrar_game_over(screen, font_title, font_body)
+                                    if reintentar:
+                                        state, entorno, wasps = iniciar_nivel()
+                                        path_cells = set()
+                                        camino_len = 0
+                                        move_count = 0
+                                    else:
+                                        running = False
                     elif event.button == 3:        # derecho
                         if edit_mode:
                             state.set_pollen(hovered_cell)
@@ -399,6 +452,14 @@ def main():
         draw_hud(screen, font_title, font_body,
                  edit_mode, state.player, state.pollen,
                  TECNICAS[tec_idx], HEURISTICAS[heu_idx], camino_len)
+        
+        # ── 7. Contador de movimientos (esquina superior derecha) ──
+        W_screen = screen.get_width()
+        moves_surf = font_title.render(f"Movimientos: {move_count}", True, (56, 142, 60))
+        moves_bg   = pygame.Surface((moves_surf.get_width() + 20, 36), pygame.SRCALPHA)
+        moves_bg.fill((255, 255, 220, 210))
+        screen.blit(moves_bg,   (W_screen - moves_bg.get_width() - 10, 10))
+        screen.blit(moves_surf, (W_screen - moves_surf.get_width() - 20, 13))
 
         pygame.display.flip()
 
