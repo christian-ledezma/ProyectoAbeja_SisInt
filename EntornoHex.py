@@ -10,6 +10,7 @@ class EntornoHex(Entorno):
         self.ultimo_camino = []       # camino encontrado (lista de celdas)
         self.tecnica = "a_estrella"
         self.heuristica = "hexagonal"
+        self.wasps = []
 
     # ------------------------------------------------------------------
     # Entrega percepciones y lanza la búsqueda
@@ -25,6 +26,8 @@ class EntornoHex(Entorno):
         agente.set_estado_inicial(gs.player)
         agente.set_estado_meta(gs.pollen)
         agente.set_tecnica(self.tecnica)
+
+        agente.wasps = set(self.wasps)
 
     # ------------------------------------------------------------------
     # Recupera el camino calculado y lo almacena

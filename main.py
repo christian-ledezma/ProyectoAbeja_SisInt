@@ -2,6 +2,8 @@ import pygame
 import math
 import sys
 import os
+from menu_dificultad import mostrar_menu, NIVELES
+from niveles_config import configurar_nivel
 
 # ──────────────────────────────────────────────
 #  ASEGURAR QUE LOS MÓDULOS DEL REPO SEAN VISIBLES
@@ -17,7 +19,7 @@ WIDTH, HEIGHT = 750, 750
 HEX_SIZE = 25
 RADIUS = 7
 
-SPRITES = {"player": "abeja2.png"}
+SPRITES = {"player": "abeja2.png", "wasp": "avispa.png"}
 
 BACKGROUND_COLOR  = (122, 155, 181)
 HEX_COLOR         = (255, 217, 61)
@@ -186,6 +188,19 @@ class GameState:
 TECNICAS    = ["costouniforme", "codicioso", "a_estrella"]
 HEURISTICAS = ["hexagonal", "euclidiana"]
 
+def _mostrar_game_over(screen, font_title, font_body, nombre_nivel):
+    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 160))
+    screen.blit(overlay, (0, 0))
+    msg1 = font_title.render("😢 ¡Una avispa te picó!", True, (255, 80, 80))
+    msg2 = font_body.render(f"Nivel: {nombre_nivel}", True, (255, 220, 80))
+    msg3 = font_body.render("Cierra la ventana para salir.", True, (200, 200, 200))
+    W, H = screen.get_size()
+    screen.blit(msg1, (W//2 - msg1.get_width()//2, H//2 - 50))
+    screen.blit(msg2, (W//2 - msg2.get_width()//2, H//2))
+    screen.blit(msg3, (W//2 - msg3.get_width()//2, H//2 + 30))
+    pygame.display.flip()
+    pygame.time.wait(3000)
 
 def main():
     pygame.init()
@@ -204,8 +219,13 @@ def main():
     offset_y = HEIGHT // 2 + 30
 
     sprites   = load_sprites(SPRITES, HEX_SIZE)
-    state     = GameState(RADIUS)
-    entorno   = EntornoHex(state)
+
+    nivel_idx    = mostrar_menu(wasp_img=sprites.get("wasp"))
+    state        = GameState(RADIUS)
+    entorno      = EntornoHex(state)
+    wasps        = configurar_nivel(state, nivel_idx)
+    nombre_nivel = NIVELES[nivel_idx][0]
+    print(f"Nivel seleccionado: {nombre_nivel} ({len(wasps)} avispas)")
 
     hovered_cell  = None
     edit_mode     = False
@@ -262,6 +282,7 @@ def main():
                     if state.pollen is not None:
                         print(f"\nBuscando: {state.player} → {state.pollen} "
                               f"[{entorno.tecnica} / {entorno.heuristica}]")
+                        entorno.wasps = wasps
                         entorno.buscar()
                         camino = entorno.ultimo_camino
                         # Celdas intermedias del camino (sin inicio ni meta)
@@ -280,9 +301,14 @@ def main():
                             path_cells = set()
                             camino_len = 0
                         else:
-                            state.move_player(hovered_cell)
-                            path_cells = set()
-                            camino_len = 0
+                            if state.move_player(hovered_cell):
+                                path_cells = set()
+                                camino_len = 0
+                                # Comprobar colisión con avispa
+                                if state.player in wasps:
+                                    print("Te picó una avispa! Fin del juego.")
+                                    _mostrar_game_over(screen, font_title, font_body, nombre_nivel)
+                                    running = False
                     elif event.button == 3:        # derecho
                         if edit_mode:
                             state.set_pollen(hovered_cell)
@@ -360,6 +386,14 @@ def main():
             draw_sprite(screen, sprites["player"], (px, py))
         else:
             pygame.draw.circle(screen, (255, 200, 0), (int(px), int(py)), HEX_SIZE // 2)
+
+        # ── 5b. Dibujar avispas ──
+        for wq, wr in wasps:
+            wx, wy = axial_to_pixel(wq, wr, HEX_SIZE, offset_x, offset_y)
+            if sprites.get("wasp"):
+                draw_sprite(screen, sprites["wasp"], (wx, wy))
+            else:
+                pygame.draw.circle(screen, (255, 100, 0), (int(wx), int(wy)), HEX_SIZE // 2)
 
         # ── 6. HUD ──
         draw_hud(screen, font_title, font_body,
