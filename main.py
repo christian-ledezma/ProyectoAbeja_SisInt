@@ -99,6 +99,7 @@ FASE_ESCUCHANDO  = "escuchando"
 FASE_PROCESANDO  = "procesando"
 FASE_ESCRIBIENDO = "escribiendo"
 FASE_DETECTADO   = "detectado"
+FASE_EXPLORANDO  = "explorando"   # jugador se mueve solo hacia la zona
 FASE_CAMINANDO   = "caminando"
 FASE_LLEGADA     = "llegada"
 FASE_ERROR       = "error"
@@ -398,6 +399,46 @@ def draw_menu_button(surface, font, hover=False):
                        btn.y + btn.height//2 - lbl.get_height()//2))
     return btn
 
+
+def draw_rendirse_button(surface, font, hover=False):
+    """Botón \"Me Rindo\" visible durante FASE_EXPLORANDO."""
+    btn = pygame.Rect(10, surface.get_height() - 145, 160, 36)
+    color  = (255, 130, 130) if hover else (240, 100, 100)
+    border = (180,  50,  50)
+    pygame.draw.rect(surface, color,  btn, border_radius=10)
+    pygame.draw.rect(surface, border, btn, 2, border_radius=10)
+    lbl = font.render("Me Rindo", True, (255, 255, 255))
+    surface.blit(lbl, (btn.x + btn.width//2  - lbl.get_width()//2,
+                       btn.y + btn.height//2 - lbl.get_height()//2))
+    return btn
+
+
+def calcular_minimos_desde_origen(game_state, entorno_ref, destino, wasps_list):
+    """Calcula el camino mínimo desde (0,0) al destino con cada algoritmo.
+
+    Retorna una lista de tuplas (tecnica, heuristica, pasos) y el mínimo global.
+    """
+    resultados = []
+    original_player = game_state.player
+    game_state.player = (0, 0)
+
+    for tec in TECNICAS:
+        heuristicas = HEURISTICAS if tec != "costouniforme" else ["hexagonal"]
+        for heu in heuristicas:
+            ent_tmp = EntornoHex(game_state)
+            ent_tmp.tecnica    = tec
+            ent_tmp.heuristica = heu
+            ent_tmp.wasps      = wasps_list
+            ent_tmp.buscar()
+            camino = ent_tmp.ultimo_camino
+            pasos  = (len(camino) - 1) if camino else -1
+            resultados.append((tec, heu, pasos))
+
+    game_state.player = original_player
+    pasos_validos = [p for _, _, p in resultados if p > 0]
+    minimo = min(pasos_validos) if pasos_validos else 0
+    return resultados, minimo
+
 # ==============================
 # ESTADO DEL JUEGO
 # ==============================
@@ -565,11 +606,17 @@ def main():
     auto_walk_idx   = 0
     auto_walk_timer = 0
 
+    # Resultados de algoritmos (se llenan al llegar)
+    resultados_algos = []   # [(tecnica, heuristica, pasos), ...]
+    minimo_global    = 0
+    pos_inicio_emocion = (0, 0)  # posición desde la que se inició la exploración
+
     # Mensajes del panel
     msg_mascota  = "¿Cómo te sientes hoy?"
     sub_mascota  = ""
     hint_mascota = "ESPACIO = hablar  |  W = escribir"
     texto_input  = ""       # buffer de texto cuando se escribe
+    btn_rindo    = None     # se dibuja solo en FASE_EXPLORANDO
     hablador.decir("¿Cómo te sientes hoy?")
 
     print("=" * 52)
@@ -628,7 +675,7 @@ def main():
                 hablador.decir(reconocedor.mensaje_error)
 
         # ──────────────────────────────────────
-        #  Auto-caminado
+        #  Auto-caminado (tras "Me Rindo")
         # ──────────────────────────────────────
         if auto_walk and auto_walk_path:
             if tick - auto_walk_timer >= AUTO_WALK_MS:
@@ -638,13 +685,34 @@ def main():
                     auto_walk_timer = tick
                 else:
                     auto_walk = False
-                    fase = FASE_LLEGADA
+                    # Calcular mínimos desde (0,0)
                     zona = ZONAS_EMOCIONES.get(emocion_actual, {})
+                    destino = zona.get("centro", state.pollen)
+                    resultados_algos, minimo_global = calcular_minimos_desde_origen(
+                        state, entorno, destino, wasps)
                     consejo = EMOCIONES.get(emocion_actual, {}).get("consejo", "")
+                    fase = FASE_LLEGADA
                     msg_mascota  = f"¡Llegamos a la {zona.get('nombre', '')}!"
                     sub_mascota  = consejo
-                    hint_mascota = "ESPACIO = hablar  |  W = escribir"
+                    hint_mascota = "ESPACIO = nueva emoción  |  N = cerrar"
                     hablador.decir(f"¡Llegamos a la {zona.get('nombre', '')}! {consejo}")
+
+        # ──────────────────────────────────────
+        #  Detección de llegada manual (FASE_EXPLORANDO)
+        # ──────────────────────────────────────
+        if fase == FASE_EXPLORANDO and emocion_actual:
+            zona = ZONAS_EMOCIONES.get(emocion_actual, {})
+            centro = zona.get("centro")
+            if state.player == centro:
+                destino = centro
+                resultados_algos, minimo_global = calcular_minimos_desde_origen(
+                    state, entorno, destino, wasps)
+                consejo = EMOCIONES.get(emocion_actual, {}).get("consejo", "")
+                fase = FASE_LLEGADA
+                msg_mascota  = f"¡Llegaste por tu cuenta a la {zona.get('nombre', '')}!"
+                sub_mascota  = consejo
+                hint_mascota = "ESPACIO = nueva emoción  |  N = cerrar"
+                hablador.decir(f"¡Llegaste por tu cuenta! {consejo}")
 
         # ──────────────────────────────────────
         #  Eventos
@@ -723,6 +791,7 @@ def main():
                         emocion_actual = None
                         path_cells = set(); camino_len = 0
                         auto_walk = False
+                        resultados_algos = []
                         reconocedor.reset()
                         hablador.decir(
                             "¡Habla! ",
@@ -740,6 +809,7 @@ def main():
                         emocion_actual = None
                         path_cells = set(); camino_len = 0
                         auto_walk = False
+                        resultados_algos = []
                         hablador.decir("Escribe cómo te sientes.")
 
                 # ── ENTER → búsqueda manual (debug) ──
@@ -753,38 +823,27 @@ def main():
                         path_cells = set(camino[1:-1]) if len(camino) > 2 else set()
                         camino_len = len(camino) - 1 if camino else 0
 
-                # ── S / Y → confirmar ir a zona ──
+                # ── S / Y → confirmar: explorar manualmente ──
                 elif event.key in (pygame.K_s, pygame.K_y):
                     if fase == FASE_DETECTADO and emocion_actual:
                         zona = ZONAS_EMOCIONES[emocion_actual]
                         state.set_pollen(zona["centro"])
-                        entorno.buscar()
-                        camino = entorno.ultimo_camino
-                        if camino and len(camino) > 1:
-                            path_cells = set(camino[1:-1]) if len(camino) > 2 else set()
-                            camino_len = len(camino) - 1
-                            auto_walk       = True
-                            auto_walk_path  = camino
-                            auto_walk_idx   = 1
-                            auto_walk_timer = tick
-                            fase = FASE_CAMINANDO
-                            msg_mascota  = f"¡Vamos a la {zona['nombre']}!"
-                            sub_mascota  = ""
-                            hint_mascota = ""
-                            hablador.decir(f"¡Vamos a la {zona['nombre']}!")
-                        else:
-                            fase = FASE_ERROR
-                            msg_mascota  = "No encontré un camino. Intenta quitar paredes."
-                            sub_mascota  = ""
-                            hint_mascota = "ESPACIO = hablar  |  W = escribir"
-                            hablador.decir("No encontré un camino. Intenta quitar paredes.")
+                        pos_inicio_emocion = state.player   # guardar pos inicial
+                        fase = FASE_EXPLORANDO
+                        msg_mascota  = f"¡Intenta llegar a la {zona['nombre']}!"
+                        sub_mascota  = "Muévete con clic. Si no puedes, pulsa 'Me Rindo'."
+                        hint_mascota = ""
+                        resultados_algos = []
+                        hablador.decir(f"¡Intenta llegar a la {zona['nombre']}! Si no puedes, pulsa Me Rindo.")
 
                 # ── N → cancelar ──
                 elif event.key == pygame.K_n:
-                    if fase == FASE_DETECTADO:
+                    if fase in (FASE_DETECTADO, FASE_EXPLORANDO, FASE_LLEGADA):
                         fase = FASE_IDLE
                         emocion_actual = None
                         target_name    = None
+                        auto_walk      = False
+                        resultados_algos = []
                         msg_mascota  = "¿Qué necesitas? Estoy aquí para ti."
                         sub_mascota  = ""
                         hint_mascota = "ESPACIO = hablar  |  W = escribir"
@@ -803,9 +862,39 @@ def main():
                     fase = FASE_IDLE
                     emocion_actual = None
                     target_name = None
+                    resultados_algos = []
                     msg_mascota  = "¿Cómo te sientes hoy?"
                     sub_mascota  = ""
                     hint_mascota = "ESPACIO = hablar  |  W = escribir"
+
+                elif (event.button == 1
+                      and fase == FASE_EXPLORANDO
+                      and btn_rindo is not None
+                      and btn_rindo.collidepoint(event.pos)):
+                    # "Me Rindo" → calcular camino desde posición actual
+                    zona = ZONAS_EMOCIONES[emocion_actual]
+                    state.set_pollen(zona["centro"])
+                    entorno.wasps = wasps
+                    entorno.buscar()
+                    camino = entorno.ultimo_camino
+                    if camino and len(camino) > 1:
+                        path_cells      = set(camino[1:-1]) if len(camino) > 2 else set()
+                        camino_len      = len(camino) - 1
+                        auto_walk       = True
+                        auto_walk_path  = camino
+                        auto_walk_idx   = 1
+                        auto_walk_timer = tick
+                        fase = FASE_CAMINANDO
+                        msg_mascota  = f"Te muestro el camino a la {zona['nombre']}."
+                        sub_mascota  = ""
+                        hint_mascota = ""
+                        hablador.decir(f"Te muestro el camino a la {zona['nombre']}.")
+                    else:
+                        fase = FASE_ERROR
+                        msg_mascota  = "No encontré un camino. Intenta quitar paredes."
+                        sub_mascota  = ""
+                        hint_mascota = "ESPACIO = hablar  |  W = escribir"
+                        hablador.decir("No encontré un camino.")
 
                 elif hovered_cell and not auto_walk:
                     if event.button == 1:
@@ -872,7 +961,7 @@ def main():
             elif is_zona:
                 zc, zb, es_cen, emo = zona_map[cell]
                 if emo == emocion_actual and fase in (
-                    FASE_DETECTADO, FASE_CAMINANDO, FASE_LLEGADA
+                    FASE_DETECTADO, FASE_EXPLORANDO, FASE_CAMINANDO, FASE_LLEGADA
                 ):
                     b = int(30 * math.sin(tick * 0.005))
                     zc = (min(255, max(0, zc[0] + b)),
@@ -931,7 +1020,7 @@ def main():
 
         # ── 6. Etiquetas de zona ──
         emo_resaltada = emocion_actual if fase in (
-            FASE_DETECTADO, FASE_CAMINANDO, FASE_LLEGADA
+            FASE_DETECTADO, FASE_EXPLORANDO, FASE_CAMINANDO, FASE_LLEGADA
         ) else None
         draw_zona_labels(screen, font_zona, ZONAS_EMOCIONES,
                          HEX_SIZE, offset_x, offset_y, emo_resaltada, tick)
@@ -980,6 +1069,44 @@ def main():
         btn_menu = draw_menu_button(screen, font_body,
                             hover=pygame.Rect(10, HEIGHT-100, 160, 36)
                                   .collidepoint(pygame.mouse.get_pos()))
+
+        # ── Botón "Me Rindo" (solo en FASE_EXPLORANDO) ──
+        btn_rindo = None
+        if fase == FASE_EXPLORANDO:
+            btn_rindo = draw_rendirse_button(
+                screen, font_body,
+                hover=pygame.Rect(10, HEIGHT-145, 160, 36)
+                      .collidepoint(pygame.mouse.get_pos()))
+
+        # ── Panel de resultados (FASE_LLEGADA) ──
+        if fase == FASE_LLEGADA and resultados_algos:
+            res_w, res_h = 420, 40 + 24 * len(resultados_algos) + 30
+            res_x = (WIDTH - res_w) // 2
+            res_y = PANEL_Y - res_h - 10
+            res_surf = pygame.Surface((res_w, res_h), pygame.SRCALPHA)
+            res_surf.fill((30, 30, 60, 220))
+            screen.blit(res_surf, (res_x, res_y))
+            pygame.draw.rect(screen, (200, 200, 255),
+                             (res_x, res_y, res_w, res_h), 2, border_radius=8)
+
+            hdr = font_title.render(
+                f"Pasos mínimos desde (0,0) — Mínimo: {minimo_global}",
+                True, (255, 255, 100))
+            screen.blit(hdr, (res_x + 10, res_y + 8))
+
+            for i, (tec, heu, pasos) in enumerate(resultados_algos):
+                etiq = f"{tec}" if tec == "costouniforme" else f"{tec} ({heu})"
+                pasos_str = str(pasos) if pasos > 0 else "sin camino"
+                color_r = (100, 255, 100) if pasos == minimo_global and pasos > 0 \
+                    else (200, 200, 200)
+                ln = font_body.render(f"  {etiq}: {pasos_str} pasos", True, color_r)
+                screen.blit(ln, (res_x + 10, res_y + 36 + i * 24))
+
+            pasos_jugador = move_count
+            comp = font_body.render(
+                f"  Tus movimientos: {pasos_jugador}", True, (255, 180, 80))
+            screen.blit(comp, (res_x + 10,
+                               res_y + 36 + len(resultados_algos) * 24 + 4))
 
         # ── 9. Panel de la mascota ──
         emo_color = None
