@@ -215,7 +215,7 @@ def _mostrar_game_over(screen, font_title, font_body):
         screen.blit(overlay, (0, 0))
 
         # Mensajes
-        msg1 = font_title.render("😢 ¡Una avispa te picó!", True, (255, 80, 80))
+        msg1 = font_title.render("¡Una avispa te picó!", True, (255, 80, 80))
         msg2 = font_body.render("¿Qué quieres hacer?", True, (255, 220, 80))
         screen.blit(msg1, (W//2 - msg1.get_width()//2, H//2 - 60))
         screen.blit(msg2, (W//2 - msg2.get_width()//2, H//2 - 20))
@@ -225,7 +225,7 @@ def _mostrar_game_over(screen, font_title, font_body):
         pygame.draw.rect(screen, (80, 200, 80) if hover_retry else (50, 160, 50),
                          btn_retry, border_radius=10)
         pygame.draw.rect(screen, (200, 255, 200), btn_retry, 2, border_radius=10)
-        lbl_r = font_body.render("🔄 ¡Otra vez!", True, (255, 255, 255))
+        lbl_r = font_body.render("¡Otra vez!", True, (255, 255, 255))
         screen.blit(lbl_r, (btn_retry.centerx - lbl_r.get_width()//2,
                              btn_retry.centery - lbl_r.get_height()//2))
 
@@ -234,7 +234,7 @@ def _mostrar_game_over(screen, font_title, font_body):
         pygame.draw.rect(screen, (200, 60, 60) if hover_exit else (160, 40, 40),
                          btn_exit, border_radius=10)
         pygame.draw.rect(screen, (255, 200, 200), btn_exit, 2, border_radius=10)
-        lbl_e = font_body.render("🚪 Salir", True, (255, 255, 255))
+        lbl_e = font_body.render("Salir", True, (255, 255, 255))
         screen.blit(lbl_e, (btn_exit.centerx - lbl_e.get_width()//2,
                              btn_exit.centery - lbl_e.get_height()//2))
 
@@ -465,7 +465,6 @@ def main():
 
     pygame.quit()
     sys.exit()
-
 
 if __name__ == "__main__":
     main()
