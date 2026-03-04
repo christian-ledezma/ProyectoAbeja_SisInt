@@ -19,7 +19,7 @@ from reconocimiento_emociones import ReconocedorEmociones, Hablador, EMOCIONES, 
 WIDTH, HEIGHT = 800, 880
 HEX_SIZE = 25
 RADIUS = 7
-PANEL_Y = 720                 # Inicio del panel inferior (mascota)
+PANEL_H = 160                  # Altura fija del panel inferior
 
 SPRITES = {"player": "abeja.png", "wasp": "avispa.png", "honey": "miel.png"}
 
@@ -270,25 +270,29 @@ def render_text_wrapped(font, text, color, max_width):
 # ==============================
 def draw_panel_mascota(surface, fonts, mascot_sprite,
                        mensaje, sub_mensaje, hint, fase,
-                       emocion_color, tick, texto_input=""):
+                       emocion_color, tick, texto_input="", panel_y=None):
     """Panel inferior con la mascota-abeja y burbuja de diálogo."""
     font_t, font_b = fonts
+    w = surface.get_width()
+    h = surface.get_height()
+    if panel_y is None:
+        panel_y = h - PANEL_H
 
     # ── Fondo ──
-    panel = pygame.Surface((WIDTH, HEIGHT - PANEL_Y), pygame.SRCALPHA)
+    panel = pygame.Surface((w, h - panel_y), pygame.SRCALPHA)
     panel.fill((245, 240, 230, 235))
-    surface.blit(panel, (0, PANEL_Y))
-    pygame.draw.line(surface, (190, 180, 160), (0, PANEL_Y), (WIDTH, PANEL_Y), 3)
+    surface.blit(panel, (0, panel_y))
+    pygame.draw.line(surface, (190, 180, 160), (0, panel_y), (w, panel_y), 3)
 
     # ── Mascota ──
-    mx, my = 55, PANEL_Y + 60
+    mx, my = 55, panel_y + 60
     if mascot_sprite:
         draw_sprite(surface, mascot_sprite, (mx, my))
     else:
         pygame.draw.circle(surface, (255, 200, 0), (mx, my), 28)
 
     # ── Burbuja ──
-    bx, by, bw, bh = 115, PANEL_Y + 12, WIDTH - 145, 105
+    bx, by, bw, bh = 115, panel_y + 12, w - 145, 105
     bubble = pygame.Rect(bx, by, bw, bh)
     pygame.draw.rect(surface, (255, 255, 255), bubble, border_radius=14)
     pygame.draw.rect(surface, (180, 180, 180), bubble, 2, border_radius=14)
@@ -299,7 +303,7 @@ def draw_panel_mascota(surface, fonts, mascot_sprite,
 
     # ── Indicador de micrófono ──
     if fase == FASE_ESCUCHANDO:
-        mic_x, mic_y = WIDTH - 50, PANEL_Y + 28
+        mic_x, mic_y = w - 50, panel_y + 28
         pulse = int(4 * math.sin(tick * 0.008)) + 14
         pygame.draw.circle(surface, (220, 50, 50), (mic_x, mic_y), pulse)
         pygame.draw.circle(surface, (255, 120, 120), (mic_x, mic_y), 6)
@@ -553,7 +557,7 @@ def draw_lives(surface, honey_sprite, lives, pos_x, pos_y, size=28):
 
 def main():
     pygame.init()
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Panal de Sentimientos – Agente IA")
     clock = pygame.time.Clock()
 
@@ -566,8 +570,7 @@ def main():
         font_body  = pygame.font.SysFont(None, 14)
         font_zona  = pygame.font.SysFont(None, 12)
 
-    offset_x = WIDTH  // 2
-    offset_y = PANEL_Y // 2 + 15
+    # offset_x / offset_y se calculan cada frame tras get_size()
 
     sprites       = load_sprites(SPRITES, HEX_SIZE)
     mascot_sprite = load_mascot_sprite(HEX_SIZE)
@@ -639,6 +642,12 @@ def main():
     while running:
         tick  = pygame.time.get_ticks()
         clock.tick(60)
+
+        # Layout dinámico según tamaño actual de la ventana
+        cur_w, cur_h = screen.get_size()
+        panel_y  = cur_h - PANEL_H
+        offset_x = cur_w  // 2
+        offset_y = panel_y // 2 + 15
 
         mouse_pos    = pygame.mouse.get_pos()
         hovered_cell = pixel_to_axial(*mouse_pos, HEX_SIZE, offset_x, offset_y)
@@ -911,6 +920,7 @@ def main():
                                     wasps.remove(state.player)
                                     lives -= 1
                                     print(f"Te picó una avispa! Vidas restantes: {lives}")
+                                    hablador.decir(f"¡Ay! Una avispa te picó. Te quedan {lives} vidas.")
                                     if lives <= 0:
                                         reintentar = _mostrar_game_over(screen, font_title, font_body)
                                         if reintentar:
@@ -1067,7 +1077,7 @@ def main():
         draw_lives(screen, sprites.get("honey"), lives, lives_x_start, lives_y, HONEY_SIZE)
 
         btn_menu = draw_menu_button(screen, font_body,
-                            hover=pygame.Rect(10, HEIGHT-100, 160, 36)
+                            hover=pygame.Rect(10, cur_h-100, 160, 36)
                                   .collidepoint(pygame.mouse.get_pos()))
 
         # ── Botón "Me Rindo" (solo en FASE_EXPLORANDO) ──
@@ -1075,14 +1085,14 @@ def main():
         if fase == FASE_EXPLORANDO:
             btn_rindo = draw_rendirse_button(
                 screen, font_body,
-                hover=pygame.Rect(10, HEIGHT-145, 160, 36)
+                hover=pygame.Rect(10, cur_h-145, 160, 36)
                       .collidepoint(pygame.mouse.get_pos()))
 
         # ── Panel de resultados (FASE_LLEGADA) ──
         if fase == FASE_LLEGADA and resultados_algos:
             res_w, res_h = 420, 40 + 24 * len(resultados_algos) + 30
-            res_x = (WIDTH - res_w) // 2
-            res_y = PANEL_Y - res_h - 10
+            res_x = (cur_w - res_w) // 2
+            res_y = panel_y - res_h - 10
             res_surf = pygame.Surface((res_w, res_h), pygame.SRCALPHA)
             res_surf.fill((30, 30, 60, 220))
             screen.blit(res_surf, (res_x, res_y))
@@ -1114,7 +1124,8 @@ def main():
             emo_color = ZONAS_EMOCIONES[emocion_actual]["color"]
         draw_panel_mascota(screen, (font_title, font_body), mascot_sprite,
                            msg_mascota, sub_mascota, hint_mascota,
-                           fase, emo_color, tick, texto_input)
+                           fase, emo_color, tick, texto_input,
+                           panel_y=panel_y)
 
         pygame.display.flip()
 
