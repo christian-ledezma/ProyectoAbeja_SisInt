@@ -151,6 +151,17 @@ def draw_hud(surface, font_title, font_body,
     path_str = f"Camino: {camino_len} pasos" if camino_len > 0 else "Camino: —"
     surface.blit(font_body.render(path_str, True, PATH_COLOR), (20, 76))
 
+def draw_menu_button(surface, font, hover=False):
+    btn = pygame.Rect(10, surface.get_height() - 100, 160, 36)
+    color  = (255, 220, 80)  if hover else (255, 200, 20)
+    border = (180, 130,  0)
+    pygame.draw.rect(surface, color,  btn, border_radius=10)
+    pygame.draw.rect(surface, border, btn, 2, border_radius=10)
+    lbl = font.render("Cambiar nivel", True, (100, 60, 0))
+    surface.blit(lbl, (btn.x + btn.width//2  - lbl.get_width()//2,
+                       btn.y + btn.height//2 - lbl.get_height()//2))
+    return btn
+
 # ==============================
 # ESTADO DEL JUEGO
 # ==============================
@@ -194,6 +205,7 @@ def _mostrar_game_over(screen, font_title, font_body):
 
     btn_retry = pygame.Rect(W//2 - 160, H//2 + 50,  145, 44)
     btn_exit  = pygame.Rect(W//2 + 15,  H//2 + 50,  145, 44)
+    btn_menu = pygame.Rect(10, HEIGHT - 100, 160, 36)
 
     while True:
         clock.tick(60)
@@ -350,6 +362,15 @@ def main():
                         print("Primero coloca el polen (clic derecho en modo edición).")
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1 and btn_menu.collidepoint(event.pos):
+                    nivel_idx    = mostrar_menu(wasp_img=sprites.get("wasp"))
+                    nombre_nivel = NIVELES[nivel_idx][0]
+                    state, entorno, wasps = iniciar_nivel()
+                    path_cells = set()
+                    camino_len = 0
+                    move_count = 0
+                    lives      = 3
+
                 if hovered_cell:
                     if event.button == 1:          # izquierdo
                         if edit_mode:
@@ -485,6 +506,10 @@ def main():
         text_y = lives_y + 4
         screen.blit(lives_text, (text_x, text_y))
         draw_lives(screen, sprites.get("honey"), lives, lives_x_start, lives_y, HONEY_SIZE)
+
+        btn_menu = draw_menu_button(screen, font_body,
+                            hover=pygame.Rect(10, HEIGHT-100, 160, 36)
+                                  .collidepoint(pygame.mouse.get_pos()))
 
         pygame.display.flip()
 

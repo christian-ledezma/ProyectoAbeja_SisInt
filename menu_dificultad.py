@@ -32,7 +32,7 @@ def mostrar_menu(wasp_img=None):
     pygame.init()
     W, H = 750, 750
     screen = pygame.display.set_mode((W, H))
-    pygame.display.set_caption("Elige tu nivel")
+    pygame.display.set_caption("Panal de Sentimientos")
     clock  = pygame.time.Clock()
 
     try:
@@ -80,7 +80,7 @@ def mostrar_menu(wasp_img=None):
         pygame.draw.rect(screen, BORDER_COLOR, panel, 3, border_radius=18)
 
         # Título
-        t1 = font_title.render("¡Panal de Aventuras!", True, TITLE_COLOR)
+        t1 = font_title.render("¡Que comience la ventura!", True, TITLE_COLOR)
         screen.blit(t1, (W // 2 - t1.get_width() // 2, 28))
         t2 = font_sub.render("Elige tu nivel de dificultad:", True, (120, 80, 0))
         screen.blit(t2, (W // 2 - t2.get_width() // 2, 68))
