@@ -392,8 +392,8 @@ def draw_zona_labels(surface, font, zonas, hex_size,
         surface.blit(lbl, (lx, ly))
 
 
-def draw_menu_button(surface, font, hover=False):
-    btn = pygame.Rect(10, surface.get_height() - 100, 160, 36)
+def draw_menu_button(surface, font, panel_y, hover=False):
+    btn = pygame.Rect(10, panel_y - 46, 160, 36)
     color  = (255, 220, 80)  if hover else (255, 200, 20)
     border = (180, 130,  0)
     pygame.draw.rect(surface, color,  btn, border_radius=10)
@@ -404,9 +404,9 @@ def draw_menu_button(surface, font, hover=False):
     return btn
 
 
-def draw_rendirse_button(surface, font, hover=False):
+def draw_rendirse_button(surface, font, panel_y, hover=False):
     """Botón \"Me Rindo\" visible durante FASE_EXPLORANDO."""
-    btn = pygame.Rect(10, surface.get_height() - 145, 160, 36)
+    btn = pygame.Rect(10, panel_y - 90, 160, 36)
     color  = (255, 130, 130) if hover else (240, 100, 100)
     border = (180,  50,  50)
     pygame.draw.rect(surface, color,  btn, border_radius=10)
@@ -1076,16 +1076,16 @@ def main():
         screen.blit(lives_text, (text_x, text_y))
         draw_lives(screen, sprites.get("honey"), lives, lives_x_start, lives_y, HONEY_SIZE)
 
-        btn_menu = draw_menu_button(screen, font_body,
-                            hover=pygame.Rect(10, cur_h-100, 160, 36)
+        btn_menu = draw_menu_button(screen, font_body, panel_y,
+                            hover=pygame.Rect(10, panel_y-46, 160, 36)
                                   .collidepoint(pygame.mouse.get_pos()))
 
         # ── Botón "Me Rindo" (solo en FASE_EXPLORANDO) ──
         btn_rindo = None
         if fase == FASE_EXPLORANDO:
             btn_rindo = draw_rendirse_button(
-                screen, font_body,
-                hover=pygame.Rect(10, cur_h-145, 160, 36)
+                screen, font_body, panel_y,
+                hover=pygame.Rect(10, panel_y-90, 160, 36)
                       .collidepoint(pygame.mouse.get_pos()))
 
         # ── Panel de resultados (FASE_LLEGADA) ──
