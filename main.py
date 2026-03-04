@@ -19,7 +19,7 @@ WIDTH, HEIGHT = 750, 750
 HEX_SIZE = 25
 RADIUS = 7
 
-SPRITES = {"player": "abeja2.png", "wasp": "avispa.png"}
+SPRITES = {"player": "abeja.png", "wasp": "avispa.png", "honey": "miel.png"}
 
 BACKGROUND_COLOR  = (122, 155, 181)
 HEX_COLOR         = (255, 217, 61)
@@ -215,7 +215,7 @@ def _mostrar_game_over(screen, font_title, font_body):
         screen.blit(overlay, (0, 0))
 
         # Mensajes
-        msg1 = font_title.render("¡Una avispa te picó!", True, (255, 80, 80))
+        msg1 = font_title.render("¡Te picaron muchas avispas, te quedaste sin vidas!", True, (255, 80, 80))
         msg2 = font_body.render("¿Qué quieres hacer?", True, (255, 220, 80))
         screen.blit(msg1, (W//2 - msg1.get_width()//2, H//2 - 60))
         screen.blit(msg2, (W//2 - msg2.get_width()//2, H//2 - 20))
@@ -239,6 +239,16 @@ def _mostrar_game_over(screen, font_title, font_body):
                              btn_exit.centery - lbl_e.get_height()//2))
 
         pygame.display.flip()
+
+def draw_lives(surface, honey_sprite, lives, pos_x, pos_y, size=28):
+    for i in range(lives):
+        x = pos_x - i * (size + 4)
+        if honey_sprite:
+            img = pygame.transform.smoothscale(honey_sprite, (size, size))
+            surface.blit(img, (x, pos_y))
+        else:
+            pygame.draw.circle(surface, (255, 200, 0),
+                               (x + size//2, pos_y + size//2), size//2)
 
 def main():
     pygame.init()
@@ -278,6 +288,7 @@ def main():
     path_cells    = set()      # celdas del camino actual (sin inicio ni meta)
     camino_len    = 0
     move_count    = 0
+    lives         = 3
 
     print("Controles:")
     print("  E        → alternar modo juego / edición")
@@ -352,16 +363,19 @@ def main():
                                 camino_len = 0
                                 # Comprobar colisión con avispa
                                 if state.player in wasps:
-                                    print("Te picó una avispa! Fin del juego.")
-                                    reintentar = _mostrar_game_over(screen, font_title, font_body)
-                                    _mostrar_game_over(screen, font_title, font_body)
-                                    if reintentar:
-                                        state, entorno, wasps = iniciar_nivel()
-                                        path_cells = set()
-                                        camino_len = 0
-                                        move_count = 0
-                                    else:
-                                        running = False
+                                    wasps.remove(state.player)   # avispa desaparece
+                                    lives -= 1
+                                    print("Te picó una avispa! Vidas restantes: {lives}")
+                                    if lives <= 0:
+                                        reintentar = _mostrar_game_over(screen, font_title, font_body)
+                                        if reintentar:
+                                            state, entorno, wasps = iniciar_nivel()
+                                            path_cells = set()
+                                            camino_len = 0
+                                            move_count = 0
+                                            lives = 3 
+                                        else:
+                                            running = False
                     elif event.button == 3:        # derecho
                         if edit_mode:
                             state.set_pollen(hovered_cell)
@@ -455,11 +469,22 @@ def main():
         
         # ── 7. Contador de movimientos (esquina superior derecha) ──
         W_screen = screen.get_width()
+
         moves_surf = font_title.render(f"Movimientos: {move_count}", True, (56, 142, 60))
-        moves_bg   = pygame.Surface((moves_surf.get_width() + 20, 36), pygame.SRCALPHA)
+        moves_bg   = pygame.Surface((moves_surf.get_width() + 30, 72), pygame.SRCALPHA)
         moves_bg.fill((255, 255, 220, 210))
         screen.blit(moves_bg,   (W_screen - moves_bg.get_width() - 10, 10))
         screen.blit(moves_surf, (W_screen - moves_surf.get_width() - 20, 13))
+
+        HONEY_SIZE = 28
+        lives_total_w = lives * (HONEY_SIZE + 4)
+        lives_x_start = W_screen - 10 - HONEY_SIZE   # alineado a la derecha
+        lives_y       = 52
+        lives_text = font_title.render("Vidas:", True, (56, 142, 60))
+        text_x = lives_x_start - lives_total_w - 30
+        text_y = lives_y + 4
+        screen.blit(lives_text, (text_x, text_y))
+        draw_lives(screen, sprites.get("honey"), lives, lives_x_start, lives_y, HONEY_SIZE)
 
         pygame.display.flip()
 
