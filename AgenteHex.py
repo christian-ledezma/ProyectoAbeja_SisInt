@@ -27,6 +27,7 @@ class AgenteHex(AgenteBuscador):
         self.grid = grid                  # set de tuplas (q, r) válidas
         self.cell_type = cell_type        # dict (q,r) -> "floor" | "wall"
         self.heuristica_tipo = heuristica  # "hexagonal" | "euclidiana"
+        self.wasps = set()
 
     def set_heuristica(self, tipo):
         self.heuristica_tipo = tipo
@@ -41,7 +42,8 @@ class AgenteHex(AgenteBuscador):
         for dq, dr in directions:
             vecino = (q + dq, r + dr)
             if vecino in self.grid and self.cell_type.get(vecino) == "floor":
-                hijos.append(vecino)
+                if vecino not in self.wasps:
+                    hijos.append(vecino)
         return hijos
 
     # ------------------------------------------------------------------

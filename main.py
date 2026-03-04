@@ -2,6 +2,8 @@ import pygame
 import math
 import sys
 import os
+from menu_dificultad import mostrar_menu, NIVELES
+from niveles_config import configurar_nivel
 
 # ──────────────────────────────────────────────
 #  ASEGURAR QUE LOS MÓDULOS DEL REPO SEAN VISIBLES
@@ -19,7 +21,7 @@ HEX_SIZE = 25
 RADIUS = 7
 PANEL_Y = 720                 # Inicio del panel inferior (mascota)
 
-SPRITES = {"player": "abeja2.png"}
+SPRITES = {"player": "abeja.png", "wasp": "avispa.png", "honey": "miel.png"}
 
 # ── Colores generales ──
 BACKGROUND_COLOR  = (122, 155, 181)
@@ -385,6 +387,17 @@ def draw_zona_labels(surface, font, zonas, hex_size,
         surface.blit(lbl, (lx, ly))
 
 
+def draw_menu_button(surface, font, hover=False):
+    btn = pygame.Rect(10, surface.get_height() - 100, 160, 36)
+    color  = (255, 220, 80)  if hover else (255, 200, 20)
+    border = (180, 130,  0)
+    pygame.draw.rect(surface, color,  btn, border_radius=10)
+    pygame.draw.rect(surface, border, btn, 2, border_radius=10)
+    lbl = font.render("Cambiar nivel", True, (100, 60, 0))
+    surface.blit(lbl, (btn.x + btn.width//2  - lbl.get_width()//2,
+                       btn.y + btn.height//2 - lbl.get_height()//2))
+    return btn
+
 # ==============================
 # ESTADO DEL JUEGO
 # ==============================
@@ -432,6 +445,71 @@ class GameState:
 # ==============================
 # MAIN
 # ==============================
+TECNICAS    = ["costouniforme", "codicioso", "a_estrella"]
+HEURISTICAS = ["hexagonal", "euclidiana"]
+
+def _mostrar_game_over(screen, font_title, font_body):
+    W, H = screen.get_size()
+    clock = pygame.time.Clock()
+
+    btn_retry = pygame.Rect(W//2 - 160, H//2 + 50,  145, 44)
+    btn_exit  = pygame.Rect(W//2 + 15,  H//2 + 50,  145, 44)
+
+    while True:
+        clock.tick(60)
+        mx, my = pygame.mouse.get_pos()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if btn_retry.collidepoint(mx, my):
+                    return True
+                if btn_exit.collidepoint(mx, my):
+                    return False
+
+        # Overlay oscuro
+        overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 170))
+        screen.blit(overlay, (0, 0))
+
+        # Mensajes
+        msg1 = font_title.render("¡Te picaron muchas avispas, te quedaste sin vidas!", True, (255, 80, 80))
+        msg2 = font_body.render("¿Qué quieres hacer?", True, (255, 220, 80))
+        screen.blit(msg1, (W//2 - msg1.get_width()//2, H//2 - 60))
+        screen.blit(msg2, (W//2 - msg2.get_width()//2, H//2 - 20))
+
+        # Botón reintentar
+        hover_retry = btn_retry.collidepoint(mx, my)
+        pygame.draw.rect(screen, (80, 200, 80) if hover_retry else (50, 160, 50),
+                         btn_retry, border_radius=10)
+        pygame.draw.rect(screen, (200, 255, 200), btn_retry, 2, border_radius=10)
+        lbl_r = font_body.render("¡Otra vez!", True, (255, 255, 255))
+        screen.blit(lbl_r, (btn_retry.centerx - lbl_r.get_width()//2,
+                             btn_retry.centery - lbl_r.get_height()//2))
+
+        # Botón salir
+        hover_exit = btn_exit.collidepoint(mx, my)
+        pygame.draw.rect(screen, (200, 60, 60) if hover_exit else (160, 40, 40),
+                         btn_exit, border_radius=10)
+        pygame.draw.rect(screen, (255, 200, 200), btn_exit, 2, border_radius=10)
+        lbl_e = font_body.render("Salir", True, (255, 255, 255))
+        screen.blit(lbl_e, (btn_exit.centerx - lbl_e.get_width()//2,
+                             btn_exit.centery - lbl_e.get_height()//2))
+
+        pygame.display.flip()
+
+def draw_lives(surface, honey_sprite, lives, pos_x, pos_y, size=28):
+    for i in range(lives):
+        x = pos_x - i * (size + 4)
+        if honey_sprite:
+            img = pygame.transform.smoothscale(honey_sprite, (size, size))
+            surface.blit(img, (x, pos_y))
+        else:
+            pygame.draw.circle(surface, (255, 200, 0),
+                               (x + size//2, pos_y + size//2), size//2)
+
 def main():
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -452,8 +530,19 @@ def main():
 
     sprites       = load_sprites(SPRITES, HEX_SIZE)
     mascot_sprite = load_mascot_sprite(HEX_SIZE)
-    state         = GameState(RADIUS)
-    entorno       = EntornoHex(state)
+
+    nivel_idx    = mostrar_menu(wasp_img=sprites.get("wasp"))
+    nombre_nivel = NIVELES[nivel_idx][0]
+
+    def iniciar_nivel():
+        st = GameState(RADIUS)
+        ent = EntornoHex(st)
+        ws = configurar_nivel(st, nivel_idx)
+        ent.wasps = ws
+        print(f"Nivel: {nombre_nivel} ({len(ws)} avispas)")
+        return st, ent, ws
+
+    state, entorno, wasps = iniciar_nivel()
     reconocedor   = ReconocedorEmociones()
     hablador      = Hablador()
 
@@ -467,6 +556,8 @@ def main():
     fase            = FASE_IDLE
     emocion_actual  = None
     target_name     = None
+    move_count      = 0
+    lives           = 3
 
     # Auto-caminado
     auto_walk       = False
@@ -654,6 +745,9 @@ def main():
                 # ── ENTER → búsqueda manual (debug) ──
                 elif event.key == pygame.K_RETURN:
                     if state.pollen is not None:
+                        print(f"\nBuscando: {state.player} → {state.pollen} "
+                              f"[{entorno.tecnica} / {entorno.heuristica}]")
+                        entorno.wasps = wasps
                         entorno.buscar()
                         camino = entorno.ultimo_camino
                         path_cells = set(camino[1:-1]) if len(camino) > 2 else set()
@@ -698,16 +792,50 @@ def main():
                         hablador.decir("¿Qué necesitas? Estoy aquí para ti.")
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                if hovered_cell and not auto_walk:
+                if event.button == 1 and btn_menu.collidepoint(event.pos):
+                    nivel_idx    = mostrar_menu(wasp_img=sprites.get("wasp"))
+                    nombre_nivel = NIVELES[nivel_idx][0]
+                    state, entorno, wasps = iniciar_nivel()
+                    path_cells = set()
+                    camino_len = 0
+                    move_count = 0
+                    lives      = 3
+                    fase = FASE_IDLE
+                    emocion_actual = None
+                    target_name = None
+                    msg_mascota  = "¿Cómo te sientes hoy?"
+                    sub_mascota  = ""
+                    hint_mascota = "ESPACIO = hablar  |  W = escribir"
+
+                elif hovered_cell and not auto_walk:
                     if event.button == 1:
                         if edit_mode:
                             state.toggle_wall(hovered_cell)
+                            path_cells = set(); camino_len = 0
                         else:
-                            state.move_player(hovered_cell)
-                        path_cells = set(); camino_len = 0
+                            if state.move_player(hovered_cell):
+                                move_count += 1
+                                path_cells = set()
+                                camino_len = 0
+                                # Comprobar colisión con avispa
+                                if state.player in wasps:
+                                    wasps.remove(state.player)
+                                    lives -= 1
+                                    print(f"Te picó una avispa! Vidas restantes: {lives}")
+                                    if lives <= 0:
+                                        reintentar = _mostrar_game_over(screen, font_title, font_body)
+                                        if reintentar:
+                                            state, entorno, wasps = iniciar_nivel()
+                                            path_cells = set()
+                                            camino_len = 0
+                                            move_count = 0
+                                            lives = 3
+                                        else:
+                                            running = False
                     elif event.button == 3 and edit_mode:
                         state.set_pollen(hovered_cell)
-                        path_cells = set(); camino_len = 0
+                        path_cells = set()
+                        camino_len = 0
                         print(f"Objetivo colocado en {hovered_cell}")
 
         # ──────────────────────────────
@@ -817,10 +945,41 @@ def main():
             pygame.draw.circle(screen, (255, 200, 0),
                                (int(px), int(py)), HEX_SIZE // 2)
 
-        # ── 8. HUD ──
+        # ── 8. Dibujar avispas ──
+        for wq, wr in wasps:
+            wx, wy = axial_to_pixel(wq, wr, HEX_SIZE, offset_x, offset_y)
+            if sprites.get("wasp"):
+                draw_sprite(screen, sprites["wasp"], (wx, wy))
+            else:
+                pygame.draw.circle(screen, (255, 100, 0), (int(wx), int(wy)), HEX_SIZE // 2)
+
+        # ── 9. HUD ──
         draw_hud(screen, font_title, font_body,
                  edit_mode, state.player, target_name,
                  TECNICAS[tec_idx], HEURISTICAS[heu_idx], camino_len)
+        
+        # ── 7. Contador de movimientos (esquina superior derecha) ──
+        W_screen = screen.get_width()
+
+        moves_surf = font_title.render(f"Movimientos: {move_count}", True, (56, 142, 60))
+        moves_bg   = pygame.Surface((moves_surf.get_width() + 30, 72), pygame.SRCALPHA)
+        moves_bg.fill((255, 255, 220, 210))
+        screen.blit(moves_bg,   (W_screen - moves_bg.get_width() - 10, 10))
+        screen.blit(moves_surf, (W_screen - moves_surf.get_width() - 20, 13))
+
+        HONEY_SIZE = 28
+        lives_total_w = lives * (HONEY_SIZE + 4)
+        lives_x_start = W_screen - 10 - HONEY_SIZE   # alineado a la derecha
+        lives_y       = 52
+        lives_text = font_title.render("Vidas:", True, (56, 142, 60))
+        text_x = lives_x_start - lives_total_w - 30
+        text_y = lives_y + 4
+        screen.blit(lives_text, (text_x, text_y))
+        draw_lives(screen, sprites.get("honey"), lives, lives_x_start, lives_y, HONEY_SIZE)
+
+        btn_menu = draw_menu_button(screen, font_body,
+                            hover=pygame.Rect(10, HEIGHT-100, 160, 36)
+                                  .collidepoint(pygame.mouse.get_pos()))
 
         # ── 9. Panel de la mascota ──
         emo_color = None
@@ -835,7 +994,6 @@ def main():
     hablador.detener()
     pygame.quit()
     sys.exit()
-
 
 if __name__ == "__main__":
     main()
