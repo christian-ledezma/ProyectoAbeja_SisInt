@@ -575,6 +575,22 @@ def main():
     sprites       = load_sprites(SPRITES, HEX_SIZE)
     mascot_sprite = load_mascot_sprite(HEX_SIZE)
 
+    # ── Imágenes de evento temporal ──
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    event_imgs = {}
+    for name, fname in [("sad", "SadFace.jpg"), ("happy", "Happy.jpg")]:
+        fpath = os.path.join(script_dir, fname)
+        if os.path.exists(fpath):
+            try:
+                event_imgs[name] = pygame.image.load(fpath).convert_alpha()
+            except pygame.error:
+                event_imgs[name] = None
+        else:
+            event_imgs[name] = None
+
+    flash_img  = None   # imagen mostrándose (Surface o None)
+    flash_end  = 0      # tick en que desaparece
+
     nivel_idx    = mostrar_menu(wasp_img=sprites.get("wasp"))
     nombre_nivel = NIVELES[nivel_idx][0]
 
@@ -705,6 +721,9 @@ def main():
                     sub_mascota  = consejo
                     hint_mascota = "ESPACIO = nueva emoción  |  N = cerrar"
                     hablador.decir(f"¡Llegamos a la {zona.get('nombre', '')}! {consejo}")
+                    if event_imgs.get("happy"):
+                        flash_img = event_imgs["happy"]
+                        flash_end = tick + 3000
 
         # ──────────────────────────────────────
         #  Detección de llegada manual (FASE_EXPLORANDO)
@@ -722,6 +741,9 @@ def main():
                 sub_mascota  = consejo
                 hint_mascota = "ESPACIO = nueva emoción  |  N = cerrar"
                 hablador.decir(f"¡Llegaste por tu cuenta! {consejo}")
+                if event_imgs.get("happy"):
+                    flash_img = event_imgs["happy"]
+                    flash_end = tick + 3000
 
         # ──────────────────────────────────────
         #  Eventos
@@ -921,6 +943,9 @@ def main():
                                     lives -= 1
                                     print(f"Te picó una avispa! Vidas restantes: {lives}")
                                     hablador.decir(f"¡Ay! Una avispa te picó. Te quedan {lives} vidas.")
+                                    if event_imgs.get("sad"):
+                                        flash_img = event_imgs["sad"]
+                                        flash_end = tick + 3000
                                     if lives <= 0:
                                         reintentar = _mostrar_game_over(screen, font_title, font_body)
                                         if reintentar:
@@ -1136,6 +1161,27 @@ def main():
                 f"  Tus movimientos: {pasos_jugador}", True, (255, 180, 80))
             screen.blit(comp, (res_x + 10,
                                res_y + 36 + len(resultados_algos) * 24 + 4))
+
+        # ── Imagen de evento temporal ──
+        if flash_img and tick < flash_end:
+            # Escalar imagen para que ocupe ~40% del ancho de pantalla
+            img_w = int(cur_w * 0.35)
+            orig_w, orig_h = flash_img.get_size()
+            img_h = int(orig_h * img_w / orig_w)
+            scaled = pygame.transform.smoothscale(flash_img, (img_w, img_h))
+            # Centrar sobre la zona de juego (arriba del panel)
+            ix = (cur_w - img_w) // 2
+            iy = (panel_y - img_h) // 2
+            # Fondo semi-transparente detrás
+            overlay = pygame.Surface((img_w + 20, img_h + 20), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 140))
+            screen.blit(overlay, (ix - 10, iy - 10))
+            screen.blit(scaled, (ix, iy))
+            # Borde redondeado
+            pygame.draw.rect(screen, (255, 255, 255),
+                             (ix - 4, iy - 4, img_w + 8, img_h + 8), 3, border_radius=12)
+        elif flash_img and tick >= flash_end:
+            flash_img = None
 
         # ── 9. Panel de la mascota ──
         emo_color = None
