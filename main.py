@@ -4,6 +4,7 @@ import sys
 import os
 from menu_dificultad import mostrar_menu, NIVELES
 from niveles_config import configurar_nivel
+from splash_screen import splash_screen
 
 # ──────────────────────────────────────────────
 #  ASEGURAR QUE LOS MÓDULOS DEL REPO SEAN VISIBLES
@@ -558,6 +559,7 @@ def draw_lives(surface, honey_sprite, lives, pos_x, pos_y, size=28):
 def main():
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+    splash_screen(screen)
     pygame.display.set_caption("Panal de Sentimientos – Agente IA")
     clock = pygame.time.Clock()
 

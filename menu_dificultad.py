@@ -3,11 +3,11 @@ import sys
 
 # Niveles: (nombre, avispas, descripción corta)
 NIVELES = [
-    ("Explorador Novato",      2,  "¡Para empezar la aventura!"),
-    ("Pequeño Aventurero",     4,  "Un poco más difícil..."),
-    ("Gran Explorador",        8,  "¡Ya eres valiente!"),
-    ("Héroe Valiente",        12,  "¡Solo para los más fuertes!"),
-    ("Maestro de la Aventura",16,  "¡El reto supremo!"),
+    ("Explorador Novato",      1,  "¡Para empezar la aventura!"),
+    ("Pequeño Aventurero",     2,  "Un poco más difícil..."),
+    ("Gran Explorador",        3,  "¡Ya eres valiente!"),
+    ("Héroe Valiente",        4,  "¡Solo para los más fuertes!"),
+    ("Maestro de la Aventura",5,  "¡El reto supremo!"),
 ]
 
 BG_COLOR        = (255, 240, 100)
