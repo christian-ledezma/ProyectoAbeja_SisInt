@@ -910,7 +910,7 @@ def main():
                         if edit_mode:
                             state.toggle_wall(hovered_cell)
                             path_cells = set(); camino_len = 0
-                        else:
+                        elif fase == FASE_EXPLORANDO:
                             if state.move_player(hovered_cell):
                                 move_count += 1
                                 path_cells = set()
@@ -943,9 +943,15 @@ def main():
         screen.fill(BACKGROUND_COLOR)
         neighbors_of_player = set(hex_neighbors(*state.player))
 
-        # Precalcular celdas de zona
+        # Precalcular celdas de zona (solo la zona activa si hay emoción)
         zona_map = {}   # celda → (color, border, es_centro, emo)
         for emo, info in ZONAS_EMOCIONES.items():
+            # Solo mostrar la zona de la emoción detectada
+            if emocion_actual and emo != emocion_actual:
+                continue
+            # En IDLE / ESCUCHANDO / PROCESANDO / ESCRIBIENDO / ERROR no mostrar ninguna
+            if not emocion_actual:
+                continue
             for celda in info["celdas"]:
                 es_centro = (celda == info["centro"])
                 c = info["color"] if es_centro else info["color_suave"]
@@ -1015,24 +1021,37 @@ def main():
             corners = [hex_corner((cx, cy), HEX_SIZE, i) for i in range(6)]
             pygame.draw.polygon(screen, bcol, corners, bw)
 
-        # ── 4. Flores principales (centro de zona) ──
+        # ── 4. Flores principales (centro de zona activa) ──
         for emo, info in ZONAS_EMOCIONES.items():
+            if emocion_actual and emo != emocion_actual:
+                continue
+            if not emocion_actual:
+                continue
             cq, cr = info["centro"]
             if (cq, cr) in cell_data:
                 cx, cy = cell_data[(cq, cr)][:2]
                 draw_flower_icon(screen, (cx, cy), info["color"], HEX_SIZE)
 
         # ── 5. Flores decorativas ──
-        for pos, col in FLORES_DECORATIVAS:
-            if pos in cell_data:
-                cx, cy = cell_data[pos][:2]
-                draw_flower_small(screen, (cx, cy), col, HEX_SIZE)
+        # Solo mostrar flores cuyo color corresponda a la emoción activa
+        if emocion_actual:
+            color_activa = ZONAS_EMOCIONES[emocion_actual]["color"]
+            for pos, col in FLORES_DECORATIVAS:
+                if col == color_activa and pos in cell_data:
+                    cx, cy = cell_data[pos][:2]
+                    draw_flower_small(screen, (cx, cy), col, HEX_SIZE)
 
-        # ── 6. Etiquetas de zona ──
+        # ── 6. Etiquetas de zona (solo la activa) ──
+        if emocion_actual and fase in (
+            FASE_DETECTADO, FASE_EXPLORANDO, FASE_CAMINANDO, FASE_LLEGADA
+        ):
+            zonas_visibles = {emocion_actual: ZONAS_EMOCIONES[emocion_actual]}
+        else:
+            zonas_visibles = {}
         emo_resaltada = emocion_actual if fase in (
             FASE_DETECTADO, FASE_EXPLORANDO, FASE_CAMINANDO, FASE_LLEGADA
         ) else None
-        draw_zona_labels(screen, font_zona, ZONAS_EMOCIONES,
+        draw_zona_labels(screen, font_zona, zonas_visibles,
                          HEX_SIZE, offset_x, offset_y, emo_resaltada, tick)
 
         # ── 7. Abeja ──
