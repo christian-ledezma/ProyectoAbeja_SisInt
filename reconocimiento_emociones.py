@@ -44,7 +44,7 @@ EMOCIONES = {
             "furia", "irritado", "irritada", "rabioso", "rabiosa", "enojo",
         ],
         "zona": "Zona de Calma",
-        "consejo": "Respira profundo, todo estará bien.",
+        "consejo": "Tranquilo, calma, yo también sufrí en progra dos",
     },
     "alegria": {
         "keywords": [
@@ -54,7 +54,7 @@ EMOCIONES = {
             "sonrisa", "risa", "reír", "alegria", "happy",
         ],
         "zona": "Zona de Celebración",
-        "consejo": "¡Qué bueno! Compartir la alegría la hace más grande.",
+        "consejo": "La vida es corta, aprovechala mientras dure",
     },
     "verguenza": {
         "keywords": [
@@ -63,7 +63,7 @@ EMOCIONES = {
             "insegura", "timidez", "penoso", "penosa", "verguenza",
         ],
         "zona": "Zona de Confianza",
-        "consejo": "Todos sentimos vergüenza a veces, ¡eres valiente!",
+        "consejo": "Vergüenza me daría reprobar antropología",
     },
     "tristeza": {
         "keywords": [
@@ -73,7 +73,7 @@ EMOCIONES = {
             "aburrido", "aburrida",
         ],
         "zona": "Zona de Juego",
-        "consejo": "Está bien sentirse triste, aquí estoy para ti.",
+        "consejo": "Vete a llorar a tu rincón.",
     },
 }
 

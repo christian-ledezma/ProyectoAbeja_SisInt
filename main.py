@@ -739,10 +739,10 @@ def main():
                     state, entorno, destino, wasps)
                 consejo = EMOCIONES.get(emocion_actual, {}).get("consejo", "")
                 fase = FASE_LLEGADA
-                msg_mascota  = f"¡Llegaste por tu cuenta a la {zona.get('nombre', '')}!"
+                msg_mascota  = f"¡Llegaste por tu cuenta a la {zona.get('nombre', '')}, mereces aprobar Sistemas Inteligentes!"
                 sub_mascota  = consejo
                 hint_mascota = "ESPACIO = nueva emoción  |  N = cerrar"
-                hablador.decir(f"¡Llegaste por tu cuenta! {consejo}")
+                hablador.decir(f"¡Llegaste por tu cuenta! {consejo}. Mereces aprobar Sistemas Inteligentes!")
                 if event_imgs.get("happy"):
                     flash_img = event_imgs["happy"]
                     flash_end = tick + 3000
